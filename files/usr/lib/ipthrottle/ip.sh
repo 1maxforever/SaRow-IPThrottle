@@ -12,7 +12,7 @@ IPT_LOG_TAG="ipthrottle-ip"
 # 记录日志
 # 参数: $1=日志级别, $2=日志消息
 ipt_log_msg() {
-    logger -t "$IPT_IP_LOG_TAG" "$1: $2"
+    logger -t "$IPT_LOG_TAG" "$1: $2"
 }
 
 # IP 地址转换为 32位整数
@@ -94,7 +94,7 @@ ip_entry_validate() {
             esac
             
             # 验证结束 IP
-            ip_validate "$end_ip"
+            ip_validate "$end_ip" || return 1
             ;;
         *)
             # 单 IP 格式

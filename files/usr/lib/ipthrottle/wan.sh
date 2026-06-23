@@ -12,7 +12,7 @@ IPT_LOG_TAG="ipthrottle-wan"
 # 记录日志
 # 参数: $1=日志级别, $2=日志消息
 wan_log_msg() {
-    logger -t "$IPT_WAN_LOG_TAG" "$1: $2"
+    logger -t "$IPT_LOG_TAG" "$1: $2"
 }
 
 # 发现所有 WAN 接口

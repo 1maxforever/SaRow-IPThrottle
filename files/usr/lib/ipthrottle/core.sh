@@ -32,7 +32,7 @@ IPT_LOG_TAG="ipthrottle-core"
 
 # 记录日志
 core_log_msg() {
-    logger -t "$IPT_CORE_LOG_TAG" "$1: $2"
+    logger -t "$IPT_LOG_TAG" "$1: $2"
 }
 
 # ==========================================
@@ -622,7 +622,8 @@ apply_tc_to_device() {
                 ip_burst_str="burst ${burst_bytes} cburst ${burst_bytes}"
             else
                 # 共享：由父 rule class 统一限制，IP class 仅做分类
-                ip_rate="1kbit"
+                # IP class 的 rate 设置为总带宽，保证流量能到达父 class 进行限速
+                ip_rate="${total_bw}mbit"
                 ip_ceil="${total_bw}mbit"
             fi
             
@@ -781,13 +782,15 @@ restore_flow_offloading() {
         saved_flow_off_hw=$(cat "$WORK_DIR/flow_offloading_hw_saved")
     fi
     
-    # 如果之前是启用的，恢复配置
+    # 如果之前是启用的，恢复配置并重启防火墙立即生效
     if [ "$saved_flow_off" = "1" ] || [ "$saved_flow_off_hw" = "1" ]; then
         core_log_msg "INFO" "Restoring flow offloading settings..."
         uci set firewall.@defaults[0].flow_offloading="$saved_flow_off" 2>/dev/null
         uci set firewall.@defaults[0].flow_offloading_hw="$saved_flow_off_hw" 2>/dev/null
         uci commit firewall 2>/dev/null
-        core_log_msg "INFO" "Flow offloading restored (will take effect on next firewall restart)"
+        # 重启防火墙让 flow offloading 设置立即生效
+        /etc/init.d/firewall restart >/dev/null 2>&1
+        core_log_msg "INFO" "Flow offloading restored and firewall restarted"
     fi
 }
 

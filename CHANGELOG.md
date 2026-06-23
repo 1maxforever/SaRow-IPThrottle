@@ -7,6 +7,28 @@
 
 ## [Unreleased]
 
+### Fixed
+- 北京时间 2026-06-23 - 修复 5 个严重 Bug 和 2 个中等问题
+  - **Bug1-3: 日志标签变量名错误**
+    - 问题: `ipt_log_msg`, `wan_log_msg`, `core_log_msg` 使用了未定义的变量名（如 `$IPT_IP_LOG_TAG`）
+    - 修复: 统一使用正确的 `$IPT_LOG_TAG` 变量
+    - 修改文件: ip.sh:15, wan.sh:15, core.sh:35
+  - **Bug4: 共享模式下 IP 限速完全失效**
+    - 问题: 共享模式 IP class 的 rate 设为 1kbit，导致流量无法到达父 class 进行限速
+    - 修复: 改为 `${total_bw}mbit`，让流量正常通过 IP class 进入父 rule class 限速
+    - 修改文件: core.sh:624-627
+  - **Bug5: IP 范围验证缺少返回检查**
+    - 问题: `ip_entry_validate` 验证结束 IP 时缺少 `|| return 1`
+    - 修复: 添加返回状态检查
+    - 修改文件: ip.sh:97
+  - **Bug6: Flow offloading 恢复后不立即生效**
+    - 问题: stop_service 恢复 flow offloading 配置后没有重启防火墙
+    - 修复: 添加 `/etc/init.d/firewall restart` 让设置立即生效
+    - 修改文件: core.sh:790-792
+  - **Bug7: 前端 localStorage 不必要的写入**
+    - 问题: 版本一致时仍写入 localStorage（实际上是正确逻辑，无需修改）
+    - 结论: 经复查该逻辑是合理的，用于版本同步
+
 ## [1.0.9] - 2026-06-10
 
 ### Fixed
