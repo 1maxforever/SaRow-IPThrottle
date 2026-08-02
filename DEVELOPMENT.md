@@ -146,7 +146,6 @@ config rule
     option name 'RuleName'
     option enabled 1
     option priority 10
-    option wan_mask 'all'
     option protocol 'all'
     option mode 'shared'
     option upload_mbps 100
@@ -160,7 +159,6 @@ config rule
 
 - **enabled**: 0=禁用，1=启用
 - **priority**: 1-99，数值越小优先级越高
-- **wan_mask**: all|wan1|wan2|wan3|wan4
 - **protocol**: all|tcp|udp|tcp+udp
 - **mode**: shared(共享)|independent(独立)
 - **upload_mbps/download_mbps**: 带宽限制（Mbps）

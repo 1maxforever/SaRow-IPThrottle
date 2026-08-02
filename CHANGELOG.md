@@ -7,6 +7,87 @@
 
 ## [Unreleased]
 
+### Removed
+- 北京时间 2026-08-02 19:20 - 删除多 WAN（wan_mask）选择功能
+  - **原因**: 下载方向 tc 挂在 br-lan（所有 WAN 共用），无法按 WAN 区分限速；
+    多 WAN 的"选择性"配置不完整，直接删除以免误导用户
+  - **变更内容**:
+    1. 前端移除 wan_mask 下拉选项，恢复仅加载 ipthrottle 配置
+    2. 后端移除 `get_rule_wan_devices`/`rule_applies_to_device`/`get_rule_wans_to_file`
+       （core.sh）与 `parse_wan_mask`/`wan_interface_exists`（wan.sh）
+    3. nftables 上传标记规则移除 oifname 过滤；tc 应用不再按设备过滤规则
+    4. 配置文件/示例/README/DEVELOPMENT/DESIGN 移除 wan_mask 字段
+  - **行为变化**: 规则自动应用到所有检测到的 WAN 设备（原 wan_mask=all 行为），
+    WAN 设备自动检测（get_wan_interfaces + 物理设备去重）保留
+  - **ACL**: 移除 network 配置读权限（前端不再需要）
+  - 修改文件: `core.sh`、`wan.sh`、`ipthrottle.js`、`luci-app-ipthrottle.json`、
+    `files/etc/config/ipthrottle`、`uci-defaults/50-ipthrottle`、`README*.md`、`DEVELOPMENT.md`、`DESIGN.md`
+
+### Fixed
+- 北京时间 2026-08-02 19:05 - 修复 7 个 Bug 和功能逻辑问题
+  - **Bug1(P0): 时间计划功能完全失效**
+    - 问题: cron 每分钟调用 `/usr/sbin/ipthrottle schedule`，但 CLI 无 `schedule` 命令，
+      `check_all_rules_status()` 是死代码，规则永远不会按时间计划自动启用/停用
+    - 修复: CLI 增加 `schedule` 命令，调用 `check_all_rules_status`，
+      有规则生效状态变化时自动 reload
+    - 修改文件: `files/usr/sbin/ipthrottle`
+  - **Bug2(P1): flow offloading 状态丢失**
+    - 问题: reload (stop+start) 时 start 覆盖保存的原始状态文件，
+      最终 stop 无法恢复用户原本开启的 flow offloading
+    - 修复: `disable_flow_offloading` 仅在首次禁用时保存原始状态（文件已存在则不覆盖）
+    - 修改文件: `files/usr/lib/ipthrottle/core.sh`
+  - **Bug3(P1): wan_mask 多 WAN 过滤完全失效**
+    - 问题: `get_rule_wans_to_file` 是死代码，所有规则应用到所有 WAN 设备；
+      且前端下拉硬编码 eth0.2-eth3.2 与后端校验的逻辑接口名(wan/wan2)不一致
+    - 修复:
+      1. 新增 `get_rule_wan_devices`（wan_mask→物理设备去重列表）和
+         `rule_applies_to_device`（规则是否作用于某设备）辅助函数
+      2. nftables 上传标记规则增加 `oifname { "dev1", "dev2" }` 限制出口设备
+      3. tc 按设备应用规则时（上传方向）过滤 wan_mask 不匹配的规则
+      4. 前端动态加载 network 接口生成 wan_mask 下拉选项
+      5. ACL 增加 network 配置读权限
+    - 注意: 下载方向(br-lan)为所有 WAN 共用，不按 WAN 区分；
+      prerouting 代理上传限速在路由前无法按出口 WAN 区分，保持对所有 WAN 生效
+    - 修改文件: `core.sh`、`ipthrottle.js`、`luci-app-ipthrottle.json`
+    - 后续变更: 因下载方向无法按 WAN 区分，多 WAN 选择功能最终被整体移除（见上方 Removed 记录）
+  - **Bug4(P1): uci-defaults 使用废弃字段名**
+    - 问题: `list schedule_days` 与 schedule.sh 读取的 `schedule_day_*` 独立 Flag 不匹配，
+      全新安装的 weekly 规则永远按"每天都生效"处理
+    - 修复: 改为 `option schedule_day_mon~sun '0/1'`（示例中的 wan_mask 字段随后随多 WAN 功能一并移除）
+    - 修改文件: `files/etc/uci-defaults/50-ipthrottle`
+  - **Bug5(P2): 共享模式 tc filter 重复 handle**
+    - 问题: 共享模式下同一规则所有 IP 用同一 mark 加多个 filter，
+      tc fw 分类器只命中第一个 → 所有流量挤进第一个 IP 的 class
+    - 修复: 共享模式只创建 rule class（限速点）+ 单一 filter 直接指向 rule class，
+      fq_codel 挂到 rule class 上；独立模式保持每 IP 叶子 class 不变
+    - 修改文件: `files/usr/lib/ipthrottle/core.sh` (apply_tc_to_device)
+  - **Bug6(P2): init.d 运行时调用 opkg/apk 安装依赖**
+    - 问题: `install_deps()` 仍在运行时执行 `apk add`/`opkg install`，
+      与 1.0.4 "绝不调用包管理器" 的设计矛盾，存在包管理器锁死锁风险
+    - 修复: 移除安装调用，改为只 modprobe 尝试加载内核模块 + 打印手动安装指引
+    - 修改文件: `files/etc/init.d/ipthrottle`
+  - **Bug7(P2): 内网跨接口流量被错误下载限速**
+    - 问题: forward 链 `ip daddr <client>` 会标记经路由器转发的内网跨接口流量
+      （LAN→LAN），在 br-lan egress 被下载限速，违背"不影响内网传输"的设计
+    - 修复: forward 链下载标记规则增加 `ip saddr != RFC1918` 排除内网源；
+      output 链（passwall 代理）不加排除（代理包 saddr=路由器LAN IP，必须保留标记）
+    - 修改文件: `files/usr/lib/ipthrottle/core.sh` (generate_nftables_config)
+  - **Bug8(P3): 依赖检测清单与混合架构不符**
+    - 问题: deps.sh 仍检测已废弃的 ifb/sch_ingress/act_mirred/act_skbedit 模块
+      （v3 混合方案已移除这些组件），导致误报依赖缺失
+    - 修复: 只检测 sch_htb（必需）+ sch_fq_codel（可选）
+    - 修改文件: `files/usr/lib/ipthrottle/deps.sh`
+  - **Bug9(P3): IP 前导零被当作八进制解析**
+    - 问题: `ip_to_int` 对 `192.168.1.010` 这类 IP 按八进制(8)计算，导致 IP 展开/比较错误
+    - 修复: 算术运算加 `10#` 前缀强制十进制
+    - 修改文件: `files/usr/lib/ipthrottle/ip.sh`
+  - **Bug10(P3): hotplug 只监听 wan/wan6 接口名**
+    - 问题: 多 WAN 或自定义接口名时 hotplug 不触发，规则不随接口变化重载
+    - 修复: source wan.sh，用 `get_wan_interfaces` 判断接口是否属于 wan zone
+    - 修改文件: `files/etc/hotplug.d/iface/90-ipthrottle`
+  - **其他**: CLI usage 文案修正（`apply` 不再误导性描述为"不重启服务"）；
+    cron/schedule.sh 过时注释更新
+
 ### Fixed
 - 北京时间 2026-06-23 - 修复 5 个严重 Bug 和 2 个中等问题
   - **Bug1-3: 日志标签变量名错误**

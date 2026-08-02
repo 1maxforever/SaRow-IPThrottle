@@ -12,12 +12,13 @@
 
 # 显示用法
 usage() {
-    echo "Usage: $0 {start|stop|reload|status|apply}"
-    echo "  start   - 启动限速服务"
-    echo "  stop    - 停止限速服务"
-    echo "  reload  - 重新加载配置并应用规则"
-    echo "  status  - 显示服务状态"
-    echo "  apply   - 立即应用当前配置（不重启服务）"
+    echo "Usage: $0 {start|stop|reload|status|apply|schedule}"
+    echo "  start    - 启动限速服务"
+    echo "  stop     - 停止限速服务"
+    echo "  reload   - 重新加载配置并应用规则"
+    echo "  status   - 显示服务状态"
+    echo "  apply    - 立即应用当前配置"
+    echo "  schedule - 检查时间计划，规则生效状态变化时自动 reload"
     exit 1
 }
 
@@ -49,6 +50,17 @@ case "$1" in
         ;;
     apply)
         cmd_apply
+        ;;
+    schedule)
+        # 检查所有规则的时间计划状态，有规则状态变化时自动 reload
+        # 实现原因: cron 每分钟调用此命令；schedule.sh 的 check_all_rules_status
+        #          会将"应该生效/失效"状态与上次保存的状态对比，
+        #          仅在状态发生变化的时刻触发规则重载，避免每分种都 reload。
+        CHANGED_RULES=$(check_all_rules_status)
+        if [ -n "$CHANGED_RULES" ]; then
+            logger -t ipthrottle "Schedule state changed for rules: $(echo "$CHANGED_RULES" | tr '\n' ' '), reloading rules"
+            reload_service
+        fi
         ;;
     *)
         usage

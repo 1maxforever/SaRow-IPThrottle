@@ -49,7 +49,10 @@ wait_pkg_lock() {
     return 1
 }
 
-# 安装依赖包
+# 检测缺失依赖（只检测+警告，绝不调用包管理器安装）
+# 实现原因: 依赖安装由包管理器(opkg/apk)在安装时原子完成（Makefile DEPENDS:= 声明），
+#          服务运行时调用 opkg/apk 会与包管理器锁冲突导致死锁（历史 Bug）。
+#          这里只做检测，缺失时输出警告+安装命令，由用户手动补装。
 install_deps() {
     local pkg_mgr=""
     
@@ -59,46 +62,21 @@ install_deps() {
         pkg_mgr="opkg"
     fi
     
-    [ -z "$pkg_mgr" ] && return 0
-    
-    logger -t ipthrottle "Installing dependencies..."
-    
-    # 安装 tc (包名因版本而异)
-    # 检查 tc 是否真正可用（不只是存在命令）
-    local tc_ok=0
-    if command -v tc >/dev/null 2>&1; then
-        if tc -V >/dev/null 2>&1; then
-            tc_ok=1
-        fi
-    fi
-    
-    if [ $tc_ok -eq 0 ]; then
-        case "$pkg_mgr" in
-            apk)
-                apk add tc-tiny 2>&1 | logger -t ipthrottle
-                ;;
-            opkg)
-                opkg install tc 2>&1 | logger -t ipthrottle || \
-                opkg install tc-tiny 2>&1 | logger -t ipthrottle || \
-                opkg install iproute2-tc 2>&1 | logger -t ipthrottle
-                ;;
-        esac
-    fi
-    
-    # 安装内核模块 (kmod-sched 包含 htb, ingress, mirred 等)
-    for kmod in kmod-ifb kmod-sched; do
-        case "$pkg_mgr" in
-            apk)  apk add "$kmod" 2>&1 | logger -t ipthrottle ;;
-            opkg) opkg install "$kmod" 2>&1 | logger -t ipthrottle ;;
-        esac
-    done
-    
-    # 加载模块
-    for mod in ifb sch_htb sch_ingress act_mirred act_skbedit; do
+    # 尝试加载内核模块（模块可能已安装但未加载，modprobe 无副作用）
+    for mod in sch_htb sch_fq_codel; do
         modprobe "$mod" 2>/dev/null
     done
     
-    logger -t ipthrottle "Dependencies installed"
+    # 输出缺失依赖的安装指引
+    logger -t ipthrottle "WARNING: Missing dependencies detected. Please install manually:"
+    if [ "$pkg_mgr" = "apk" ]; then
+        logger -t ipthrottle "  apk add tc-tiny nftables kmod-sched-core kmod-sched-htb kmod-ifb"
+    elif [ "$pkg_mgr" = "opkg" ]; then
+        logger -t ipthrottle "  opkg install tc-tiny nftables kmod-sched-core kmod-sched-htb kmod-ifb"
+    else
+        logger -t ipthrottle "  Install tc/nftables and required kernel modules"
+    fi
+    logger -t ipthrottle "  Then run: /etc/init.d/ipthrottle restart"
 }
 
 start_service() {

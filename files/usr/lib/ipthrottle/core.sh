@@ -204,18 +204,6 @@ get_download_mark_for_rule() {
     [ -n "$mark" ] && echo $((mark + 1000))
 }
 
-# 获取规则的 wan_mask 解析后的接口列表（输出到文件）
-# 参数: $1=rule section, $2=输出文件
-get_rule_wans_to_file() {
-    local rule="$1"
-    local outfile="$2"
-    local mask
-    mask=$(uci -q get ipthrottle."$rule".wan_mask)
-    [ -z "$mask" ] && mask="all"
-    parse_wan_mask "$mask" > "$outfile"
-    return $?
-}
-
 # ==========================================
 # tc htb 层级树生成
 # ==========================================
@@ -352,6 +340,14 @@ HEADER
         _mark_down=$(get_download_mark_for_rule "$_rule")
         [ -z "$_mark_up" ] && continue
         
+        # 内网网段集合（RFC1918 + 环回 + 链路本地）
+        # 实现原因: forward 链下载标记排除内网源地址，
+        #          避免"经路由器转发的内网跨接口流量"被错误下载限速。
+        #          公网下载流量 saddr=公网IP → 不在集合内 → 正常标记限速。
+        #          注意: output 链(passwall代理)不能加此排除，
+        #          因为代理进程发出的包 saddr=路由器LAN IP(属于内网)。
+        local _lan_excl="{ 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16 }"
+        
         local _proto
         _proto=$(uci -q get ipthrottle."$_rule".proto)
         [ -z "$_proto" ] && _proto="any"
@@ -400,28 +396,30 @@ HEADER
             case "$_proto" in
                 tcp)
                     # forward: 上传+下载（直连流量）
+                    # 注: 规则自动应用到所有 WAN 设备（多 WAN 选择功能已移除）
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_ip_mark_up" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto tcp meta mark set $_ip_mark_down" >> "$fwd_rules"
-                    # output: 仅下载（passwall 代理流量）
+                    # 下载: 排除内网源，避免内网跨接口流量被限速
+                    echo "add rule ip ipthrottle forward ip saddr != $_lan_excl ip daddr $_ip meta l4proto tcp meta mark set $_ip_mark_down" >> "$fwd_rules"
+                    # output: 仅下载（passwall 代理流量，saddr=路由器IP 不能排除内网）
                     echo "add rule ip ipthrottle output ip daddr $_ip meta l4proto tcp meta mark set $_ip_mark_down" >> "$out_rules"
                     ;;
                 udp)
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_ip_mark_up" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto udp meta mark set $_ip_mark_down" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr != $_lan_excl ip daddr $_ip meta l4proto udp meta mark set $_ip_mark_down" >> "$fwd_rules"
                     echo "add rule ip ipthrottle output ip daddr $_ip meta l4proto udp meta mark set $_ip_mark_down" >> "$out_rules"
                     ;;
                 tcp+udp)
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_ip_mark_up" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto tcp meta mark set $_ip_mark_down" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr != $_lan_excl ip daddr $_ip meta l4proto tcp meta mark set $_ip_mark_down" >> "$fwd_rules"
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_ip_mark_up" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto udp meta mark set $_ip_mark_down" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr != $_lan_excl ip daddr $_ip meta l4proto udp meta mark set $_ip_mark_down" >> "$fwd_rules"
                     echo "add rule ip ipthrottle output ip daddr $_ip meta l4proto tcp meta mark set $_ip_mark_down" >> "$out_rules"
                     echo "add rule ip ipthrottle output ip daddr $_ip meta l4proto udp meta mark set $_ip_mark_down" >> "$out_rules"
                     ;;
                 *)
                     # any: 不限制协议
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta mark set $_ip_mark_up" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle forward ip daddr $_ip meta mark set $_ip_mark_down" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr != $_lan_excl ip daddr $_ip meta mark set $_ip_mark_down" >> "$fwd_rules"
                     echo "add rule ip ipthrottle output ip daddr $_ip meta mark set $_ip_mark_down" >> "$out_rules"
                     ;;
             esac
@@ -598,9 +596,19 @@ apply_tc_to_device() {
             # 添加 burst/cburst 控制令牌桶大小，提高限速精度
             tc class add dev "$dev" parent "1:$_priority" classid "1:${rule_minor}" \
                 htb rate "$_rate_str" ceil "$_rate_str" burst ${burst_bytes} cburst ${burst_bytes}
+            # ==========================================
+            # 共享模式: 在 rule class 上直接挂 fq_codel
+            # 实现原因: 共享模式所有 IP 流量汇入 rule class（见第二遍单一 filter），
+            #          不再创建每 IP 叶子 class，因此叶子队列挂在 rule class 上，
+            #          保证共享带宽内仍能按流公平排队、控制突发。
+            # ==========================================
+            tc qdisc add dev "$dev" parent "1:${rule_minor}" fq_codel \
+                limit 1024 interval 100ms target 5ms 2>/dev/null
+            # 共享模式不创建 IP 叶子 class，直接进入下一条规则
+            continue
         fi
         
-        # 展开 IP 列表
+        # 独立模式: 展开 IP 列表并创建叶子 class（实际限速点）
         ip_entries_for_rule "$_rule" | ip_dedup_sort > "$ip_list_file"
         [ -s "$ip_list_file" ] || continue
         
@@ -613,23 +621,13 @@ apply_tc_to_device() {
             # IP class minor = offset + priority*100 + rule_idx*10 + ip_id
             local ip_minor=$(( ip_minor_offset + _priority * 100 + _rule_idx * 10 + _ip_id ))
             
-            local ip_rate ip_ceil ip_burst_str=""
-            if [ "$_mode" = "independent" ]; then
-                # 独立：每个 IP 有独立的 rate 和 ceil，是实际限速点
-                ip_rate="$_rate_str"
-                ip_ceil="$_rate_str"
-                # 独立模式下 IP class 需要 burst 参数控制令牌桶
-                ip_burst_str="burst ${burst_bytes} cburst ${burst_bytes}"
-            else
-                # 共享：由父 rule class 统一限制，IP class 仅做分类
-                # IP class 的 rate 设置为总带宽，保证流量能到达父 class 进行限速
-                ip_rate="${total_bw}mbit"
-                ip_ceil="${total_bw}mbit"
-            fi
+            # 独立模式: 每个 IP 有独立的 rate 和 ceil，是实际限速点
+            # 独立模式下 IP class 需要 burst 参数控制令牌桶
+            local ip_burst_str="burst ${burst_bytes} cburst ${burst_bytes}"
             
             # 创建 IP class（叶子 class）
             tc class add dev "$dev" parent "1:${rule_minor}" classid "1:${ip_minor}" \
-                htb rate "$ip_rate" ceil "$ip_ceil" $ip_burst_str
+                htb rate "$_rate_str" ceil "$_rate_str" $ip_burst_str
             
             # ==========================================
             # 添加 fq_codel 叶子队列调度器
@@ -690,6 +688,22 @@ apply_tc_to_device() {
         
         local _rule_idx
         _rule_idx=$(next_ip_id)
+        # rule class minor 与第一遍相同，供共享模式 filter 直接指向限速 class
+        local rule_minor=$(( 100 + _priority * 10 + _rule_idx ))
+        
+        # ==========================================
+        # 共享模式: 只添加一个 filter，所有 IP 的共享 mark 直接指向 rule class
+        # 实现原因: 同一规则内所有 IP 使用相同的 mark(handle)，
+        #          若为每个 IP 各加一个同 handle 的 filter，tc fw 分类器
+        #          只命中链表第一个 → 所有流量都进第一个 IP 的 class。
+        #          改为单一 filter 指向 rule class（限速点），
+        #          消除重复 handle，且共享流量正确汇聚到共享限速 class。
+        # ==========================================
+        if [ "$_mode" != "independent" ]; then
+            tc filter add dev "$dev" parent 1:0 protocol ip \
+                handle "$_rule_mark" fw classid "1:${rule_minor}"
+            continue
+        fi
         
         ip_entries_for_rule "$_rule" | ip_dedup_sort > "$ip_list_file"
         [ -s "$ip_list_file" ] || continue
@@ -701,18 +715,13 @@ apply_tc_to_device() {
             _ip_id=$(next_ip_id)
             local ip_minor=$(( ip_minor_offset + _priority * 100 + _rule_idx * 10 + _ip_id ))
             
-            # 根据模式选择 mark
+            # 独立模式: 从映射文件读取 IP 级别的 mark
+            # 注意: 独立模式下每条规则/每个 IP 的 mark 唯一，不会重复
             local _mark
-            if [ "$_mode" = "independent" ]; then
-                # 独立模式: 从映射文件读取 IP 级别的 mark
-                if [ "$direction" = "up" ]; then
-                    _mark=$(awk -v ip="$_ip" '$1==ip {print $2}' "$ip_mark_map")
-                else
-                    _mark=$(awk -v ip="$_ip" '$1==ip {print $3}' "$ip_mark_map")
-                fi
+            if [ "$direction" = "up" ]; then
+                _mark=$(awk -v ip="$_ip" '$1==ip {print $2}' "$ip_mark_map")
             else
-                # 共享模式: 使用规则级别的 mark
-                _mark=$_rule_mark
+                _mark=$(awk -v ip="$_ip" '$1==ip {print $3}' "$ip_mark_map")
             fi
             [ -z "$_mark" ] && continue
             
@@ -742,8 +751,14 @@ disable_flow_offloading() {
     flow_off_hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
     
     # 记录原始状态，供 stop_service 恢复
-    echo "${flow_off:-0}" > "$WORK_DIR/flow_offloading_saved"
-    echo "${flow_off_hw:-0}" > "$WORK_DIR/flow_offloading_hw_saved"
+    # 注意: reload (stop+start) 流程中 start 会再次调用本函数，
+    #       此时 UCI 已被禁用(0)，若重新保存会把"原始启用状态"覆盖丢失，
+    #       导致最终 stop_service 时无法恢复用户的 flow offloading 配置。
+    #       因此仅在本服务本次运行期间首次禁用时保存原始状态。
+    if [ ! -f "$WORK_DIR/flow_offloading_saved" ]; then
+        echo "${flow_off:-0}" > "$WORK_DIR/flow_offloading_saved"
+        echo "${flow_off_hw:-0}" > "$WORK_DIR/flow_offloading_hw_saved"
+    fi
     
     # 检查是否启用了 flow offloading
     if [ "$flow_off" = "1" ] || [ "$flow_off_hw" = "1" ]; then

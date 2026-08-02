@@ -8,5 +8,5 @@
 # 每分钟执行一次时间计划检查
 * * * * * root /usr/sbin/ipthrottle schedule
 
-# 注意: schedule 命令会检查所有规则的 schedule_json，
-# 根据当前时间和星期判断是否应该生效，必要时自动 reload
+# 注意: schedule 命令会检查所有规则的 schedule_type/schedule_day_*/schedule_start/schedule_end，
+# 根据当前时间和星期判断规则是否应该生效，状态变化时自动 reload

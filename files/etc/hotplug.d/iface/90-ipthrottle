@@ -4,10 +4,19 @@
 # 文件: /etc/hotplug.d/iface/90-ipthrottle
 # 功能: 监听网络接口状态变化，自动重新应用限速规则
 # 创建时间: 2026-06-09
+# 修改时间: 2026-08-02 (修复: 支持任意 WAN 接口名，不再硬编码 wan/wan6)
 # ==========================================
 
-# 只在接口状态变化时触发
-[ "$INTERFACE" = "wan" -o "$INTERFACE" = "wan6" ] || exit 0
+# 加载 WAN 接口管理模块（复用 get_wan_interfaces 判断接口是否属于 wan zone）
+# 实现原因: 多 WAN 或自定义接口名(如 wanb/eth0.2 逻辑接口)时，
+#          原先硬编码判断 wan/wan6 会导致 hotplug 不触发，规则不会随接口变化重载
+. /usr/lib/ipthrottle/wan.sh
+
+# 只在接口状态变化且接口属于 wan zone 时触发
+# 实现原因: 任意逻辑接口名都能正确判断，避免漏触发或误触发
+if ! get_wan_interfaces 2>/dev/null | grep -qx "$INTERFACE"; then
+    exit 0
+fi
 
 # 检查接口动作
 case "$ACTION" in

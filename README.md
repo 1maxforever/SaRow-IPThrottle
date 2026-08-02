@@ -119,7 +119,6 @@ http://192.168.1.1/cgi-bin/luci/admin/network/IPThrottle
 1. 点击"添加新规则"
 2. 填写规则信息：
    - **规则名称**：例如 "限制下载"
-   - **WAN接口**：选择 wan1（或 all）
    - **IP地址**：输入 192.168.1.100
    - **下载限速**：输入 1024 (KB/s)
    - **上传限速**：输入 512 (KB/s)
@@ -133,7 +132,6 @@ http://192.168.1.1/cgi-bin/luci/admin/network/IPThrottle
 ```json
 {
   "name": "限制下载",
-  "wan_mask": "wan1",
   "ip_entry": ["192.168.1.100"],
   "proto": "any",
   "mode": "independent",
@@ -152,7 +150,6 @@ http://192.168.1.1/cgi-bin/luci/admin/network/IPThrottle
 ```json
 {
   "name": "网段限制",
-  "wan_mask": "wan1",
   "ip_entry": ["192.168.1.50-192.168.1.100"],
   "proto": "any",
   "mode": "shared",
@@ -172,7 +169,6 @@ http://192.168.1.1/cgi-bin/luci/admin/network/IPThrottle
 | 参数名 | 类型 | 必填 | 说明 | 示例 |
 |--------|------|------|------|------|
 | name | string | 是 | 规则名称 | "下载限制" |
-| wan_mask | string | 是 | WAN接口 | "wan1", "wan2", "all" |
 | ip_entry | list | 是 | IP地址列表 | ["192.168.1.100"] |
 | proto | string | 是 | 协议 | "any", "tcp", "udp" |
 | mode | string | 是 | 限速模式 | "independent", "shared" |

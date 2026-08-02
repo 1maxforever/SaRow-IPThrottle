@@ -133,7 +133,6 @@ Default location: **Network → IP Throttle**
 ```json
 {
   "name": "Limit Download",
-  "wan_mask": "wan1",
   "ip_entry": ["192.168.1.100"],
   "proto": "any",
   "mode": "independent",
@@ -152,7 +151,6 @@ Default location: **Network → IP Throttle**
 ```json
 {
   "name": "Network Segment Limit",
-  "wan_mask": "wan1",
   "ip_entry": ["192.168.1.50-192.168.1.100"],
   "proto": "any",
   "mode": "shared",
@@ -172,7 +170,6 @@ Default location: **Network → IP Throttle**
 | Parameter | Type | Required | Description | Example |
 |-----------|------|----------|-------------|---------|
 | name | string | Yes | Rule name | "Download Limit" |
-| wan_mask | string | Yes | WAN interface | "wan1", "wan2", "all" |
 | ip_entry | list | Yes | IP address list | ["192.168.1.100"] |
 | proto | string | Yes | Protocol | "any", "tcp", "udp" |
 | mode | string | Yes | Throttling mode | "independent", "shared" |

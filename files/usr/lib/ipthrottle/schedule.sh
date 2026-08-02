@@ -2,10 +2,11 @@
 # ==========================================
 # OpenWrt-IPThrottle 时间计划校验模块
 # 文件: /usr/lib/ipthrottle/schedule.sh
-# 功能: 读取 UCI 中的 schedule_type/schedule_days/schedule_start/schedule_end
+# 功能: 读取 UCI 中的 schedule_type/schedule_day_*/schedule_start/schedule_end
 #       判断当前时间是否在生效范围内
 # 创建时间: 2026-06-09
 # 修改时间: 2026-06-10 (简化为独立字段，移除 JSON 解析)
+# 修改时间: 2026-08-02 (字段说明更新: schedule_days 列表已废弃，改用 schedule_day_* 独立 Flag)
 # ==========================================
 
 # 日志标签
@@ -62,7 +63,7 @@ is_time_in_range() {
     fi
 }
 
-# 判断今天是星期几是否在 schedule_days 列表中
+# 判断今天是星期几是否在生效星期列表中
 # 参数: $1=rule section 名
 # 返回: 0=匹配, 1=不匹配
 # 实现原因: LuCI 使用独立的 Flag 字段存储每天（schedule_day_mon/tue/wed/thu/fri/sat/sun）
@@ -129,7 +130,7 @@ is_today_in_schedule_days() {
 # 实现原因: 根据用户设置的 schedule_type 类型决定规则是否在当前时间生效
 # UCI 字段说明:
 #   schedule_type: "always"(全天生效，默认) 或 "weekly"(自定义时间)
-#   schedule_days: list 类型，0=周日，1-6=周一到周六（仅 weekly 时有效）
+#   schedule_day_mon~sun: 每天是否生效的独立 Flag（仅 weekly 时有效）
 #   schedule_start: 开始时间 HH:MM（仅 weekly 时有效，默认 00:00）
 #   schedule_end: 结束时间 HH:MM（仅 weekly 时有效，默认 23:59）
 check_rule_should_active() {

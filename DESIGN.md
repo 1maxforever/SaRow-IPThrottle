@@ -51,10 +51,8 @@ wan_ifaces=$(uci -q get firewall.@zone[$wan_zone_idx].network)
 # 返回: wan wan2 wan6 等
 ```
 
-#### wan_mask 存储格式
-- **UCI 字段**: `option wan_mask 'all'` 或 `option wan_mask 'wan,wan2'`
-- **含义**: 该规则作用于哪些 WAN 接口
-- **后端处理**: 遍历 wan_mask 中每个接口名，在对应 WAN 接口上挂载 tc qdisc 层级
+> **注意**: 多 WAN 选择功能已移除（下载方向 br-lan 共用，无法按 WAN 区分）。
+> 规则自动应用到所有检测到的 WAN 设备。
 
 ### 3.3 IP 冲突优先级策略
 
@@ -275,7 +273,6 @@ tc filter add dev ifb0 parent 1:0 protocol ip handle 0x2 fw classid 1:1003
 
 config rule
     option name '办公室普通'
-    option wan_mask 'all'
     option proto 'tcp'
     option mode 'shared'
     option upload_kbps '512'
@@ -291,7 +288,6 @@ config rule
 
 config rule
     option name '服务器'
-    option wan_mask 'wan1'
     option proto 'any'
     option mode 'independent'
     option upload_kbps '5120'
@@ -390,7 +386,7 @@ ipthrottle/
 
 ### 阶段 6: LuCI 前端 (预计 6h)
 - [ ] 规则列表页 (GridSection, 9 列表格，启用状态 toggle)
-- [ ] 规则编辑页 (表单字段: name, wan_mask, ip_entry, proto, mode, rate, priority, schedule)
+- [ ] 规则编辑页 (表单字段: name, ip_entry, proto, mode, rate, priority, schedule)
 - [ ] IP 段动态添加 (form.DynamicList，自定义 IP 格式验证)
 - [ ] 时间计划编辑器 (方案 B: 星期 checkbox + 时间范围输入)
 - [ ] 实时验证 (IP格式, 范围合法性, priority 范围 1-99)
@@ -637,7 +633,7 @@ reload_service() {
 ### 已知限制
 1. **不支持 CIDR**: 仅支持 `-` 语法 IP 段，不支持 192.168.1.0/24
 2. **不支持端口匹配**: proto 字段仅区分 tcp/udp，不支持端口范围
-3. **单规则单 WAN**: wan_mask 可多选，但 tc 层级在每个 WAN 独立，无法跨 WAN 共享带宽
+3. **不支持按 WAN 区分**: 多 WAN 选择功能已移除，规则应用到所有 WAN 设备（下载方向 br-lan 共用，无法按 WAN 区分）
 4. **无实时统计**: 无法在 LuCI 查看每个 IP 实时流量 (需后续扩展 ucollect 或自定义 RPC)
 
 ### 未来扩展

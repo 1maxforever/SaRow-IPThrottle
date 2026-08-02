@@ -104,7 +104,7 @@
 		document.head.appendChild(style);
 
 		m = new form.Map('ipthrottle', _('IPThrottle - 内网IP限速'),
-			_('按IP限制上传/下载带宽，支持独立/共享限速、IP范围、协议过滤、多WAN和时间计划'));
+			_('按IP限制上传/下载带宽，支持独立/共享限速、IP范围、协议过滤和时间计划'));
 
 		// ==========================================
 		// 运行状态横幅
@@ -186,17 +186,6 @@
 		// ==========================================
 		// 编辑弹窗中的详细字段（modalonly）
 		// ==========================================
-
-		// WAN线路选择
-		o = s.option(form.ListValue, 'wan_mask', _('网络接口'));
-		o.value('all', _('所有接口'));
-		o.value('eth0.2', _('WAN1'));
-		o.value('eth1.2', _('WAN2'));
-		o.value('eth2.2', _('WAN3'));
-		o.value('eth3.2', _('WAN4'));
-		o.default = 'all';
-		o.rmempty = false;
-		o.modalonly = true;
 
 		// 协议选择
 		o = s.option(form.ListValue, 'proto', _('协议'));

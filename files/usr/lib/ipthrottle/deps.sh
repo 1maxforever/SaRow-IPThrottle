@@ -100,22 +100,14 @@ check_all_deps() {
     check_nft || failed=1
     
     # 3. 检测内核模块
-    # ifb: IFB 虚拟网卡（入站流量镜像目标）
-    check_kmod_only "ifb" "kmod-ifb" "" || failed=1
-    
+    # 注意: 当前架构为混合方案(v3)——上传 tc 挂 WAN 设备 egress，下载 tc 挂 br-lan egress，
+    #       已不再使用 IFB、ingress qdisc、act_mirred、act_skbedit 等组件，
+    #       因此只检测 htb 调度器（必需）和 fq_codel（可选，用于限速精度）。
     # sch_htb: HTB 流量调度（核心模块，必须）
     check_kmod_only "sch_htb" "kmod-sched-htb" "" || failed=1
     
-    # sch_ingress: ingress qdisc（可选，某些固件已内置）
-    check_kmod_only "sch_ingress" "kmod-sched" "optional"
-    
-    # act_mirred: 流量重定向到 IFB（可选，某些固件已内置）
-    check_kmod_only "act_mirred" "kmod-sched" "optional"
-    
-    # act_skbedit: 在 tc ingress 设置 skb mark
-    # 实现原因: 下载方向包需在 WAN ingress 标记（重定向到 IFB 之前），
-    #           nftables forward chain 对 mirred 重定向包不生效
-    check_kmod_only "act_skbedit" "kmod-sched" "optional"
+    # sch_fq_codel: 叶子队列调度器（可选，某些固件已内置，缺失只影响限速精度）
+    check_kmod_only "sch_fq_codel" "kmod-sched-core" "optional"
     
     if [ $failed -eq 0 ]; then
         deps_log "All dependencies OK"

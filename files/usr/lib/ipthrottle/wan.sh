@@ -57,20 +57,6 @@ get_wan_interfaces() {
     echo "$networks" | tr ' ' '\n'
 }
 
-# 验证 WAN 接口是否存在
-# 参数: $1=接口名 (如 wan, wan2)
-# 返回: 0=存在, 1=不存在
-# 实现原因: 用户配置的 wan_mask 可能包含不存在的接口，需要校验
-wan_interface_exists() {
-    local iface="$1"
-    
-    # 检查接口是否在 get_wan_interfaces 输出中
-    local all_wans
-    all_wans=$(get_wan_interfaces) || return 1
-    
-    echo "$all_wans" | grep -q "^${iface}$"
-}
-
 # 获取 WAN 接口的物理设备名
 # 参数: $1=接口名 (如 wan)
 # 输出: 物理设备名 (如 eth0.2, pppoe-wan)
@@ -177,30 +163,4 @@ detect_wan_bandwidth() {
     fi
     
     return 1
-}
-
-# 解析 wan_mask 为接口列表
-# 参数: $1=wan_mask (如 "all" 或 "wan,wan2")
-# 输出: 每行一个接口名
-# 返回: 0=成功, 1=包含无效接口
-# 实现原因: 规则的 wan_mask 字段可能是 "all" 或逗号分隔的接口列表，需要统一处理
-parse_wan_mask() {
-    local mask="$1"
-    
-    # "all" 表示所有 WAN
-    if [ "$mask" = "all" ]; then
-        get_wan_interfaces
-        return $?
-    fi
-    
-    # 逗号分隔的接口列表
-    local IFS=','
-    for iface in $mask; do
-        # 验证接口是否存在
-        if ! wan_interface_exists "$iface"; then
-            wan_log_msg "ERROR" "WAN interface not found: $iface"
-            return 1
-        fi
-        echo "$iface"
-    done
 }
