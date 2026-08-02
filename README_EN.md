@@ -8,7 +8,7 @@
 
 Based on a hybrid architecture of nftables + tc htb, it achieves precise IP-based traffic throttling with independent/shared bandwidth modes.  
 **Compatible with passwall transparent proxy**, both proxy and direct traffic can be throttled, covering all network scenarios.  
-Supports multi-WAN, IP ranges, protocol filtering, and time schedules to meet complex network environment requirements.
+Supports IP ranges, protocol filtering, and time schedules to meet complex network environment requirements.
 
 ### Core Features
 
@@ -16,7 +16,6 @@ Supports multi-WAN, IP ranges, protocol filtering, and time schedules to meet co
 - 🌐 **passwall Compatible**: Automatically identifies proxy traffic, no extra configuration needed
 - 📊 **Dual Throttling Modes**: Independent (per-IP bandwidth) / Shared (multi-IP bandwidth pool)
 - ⏰ **Time Scheduling**: Auto-activation by day of week/time period, flexible network usage control
-- 🚀 **Multi-WAN Support**: Independent rules for different WAN interfaces
 - 🔧 **LuCI Interface**: Visual configuration with priority sorting, clear at a glance
 
 ## Core Functions
@@ -32,7 +31,6 @@ Supports multi-WAN, IP ranges, protocol filtering, and time schedules to meet co
   - IP address range (e.g., 192.168.1.10-192.168.1.20)
   - Mixed target lists
 - **Protocol Filtering**: Supports TCP, UDP, or any protocol
-- **Multi-WAN Support**: Set different rules for different WAN interfaces
 
 ### Time Scheduling
 - **24-hour Schedule**: Set start and end times
@@ -119,7 +117,6 @@ Default location: **Network → IP Throttle**
 1. Click "Add New Rule"
 2. Fill in rule information:
    - **Rule Name**: e.g., "Limit Download"
-   - **WAN Interface**: Select wan1 (or all)
    - **IP Address**: Enter 192.168.1.100
    - **Download Limit**: Enter 1024 (KB/s)
    - **Upload Limit**: Enter 512 (KB/s)

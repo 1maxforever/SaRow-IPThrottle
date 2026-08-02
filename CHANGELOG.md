@@ -20,8 +20,10 @@
   - **行为变化**: 规则自动应用到所有检测到的 WAN 设备（原 wan_mask=all 行为），
     WAN 设备自动检测（get_wan_interfaces + 物理设备去重）保留
   - **ACL**: 移除 network 配置读权限（前端不再需要）
+  - **文档清理**: README/README_EN/PROJECT_SUMMARY/DEVELOPMENT/DESIGN 中
+    所有"多 WAN 支持"宣传文案与 wan_mask 示例已同步移除
   - 修改文件: `core.sh`、`wan.sh`、`ipthrottle.js`、`luci-app-ipthrottle.json`、
-    `files/etc/config/ipthrottle`、`uci-defaults/50-ipthrottle`、`README*.md`、`DEVELOPMENT.md`、`DESIGN.md`
+    `files/etc/config/ipthrottle`、`uci-defaults/50-ipthrottle`、`README*.md`、`PROJECT_SUMMARY.md`、`DEVELOPMENT.md`、`DESIGN.md`
 
 ### Fixed
 - 北京时间 2026-08-02 19:05 - 修复 7 个 Bug 和功能逻辑问题
