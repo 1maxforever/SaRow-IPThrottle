@@ -27,9 +27,12 @@ time_to_minutes() {
     local hours="${time_str%:*}"
     local minutes="${time_str#*:}"
     
-    # 去除前导零（避免 shell 认为是八进制）
-    hours=$((10#$hours))
-    minutes=$((10#$minutes))
+    # 强制去掉 0，解决 OpenWrt 25.12 中 08, 09 的崩溃问题
+    hours="${hours#0}"
+    minutes="${minutes#0}"
+    
+    [ -z "$hours" ] && hours="0"
+    [ -z "$minutes" ] && minutes="0"
     
     echo $(( hours * 60 + minutes ))
 }
@@ -199,9 +202,9 @@ check_all_rules_status() {
         enabled=$(uci -q get ipthrottle."$config".enabled)
         [ "$enabled" = "1" ] || continue
         
-        # 检查当前应该生效还是失效
-        local should_active=0
-        check_rule_should_active "$config" || should_active=1
+        # 检查当前应该生效还是失效（0=生效，1=失效）
+        local should_active=1
+        check_rule_should_active "$config" || should_active=0
         
         # 读取上次状态（0=生效, 1=失效, 空=首次）
         local status_file="$status_dir/$config"
