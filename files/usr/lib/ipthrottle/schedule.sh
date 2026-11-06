@@ -27,9 +27,11 @@ time_to_minutes() {
     local hours="${time_str%:*}"
     local minutes="${time_str#*:}"
     
-    # 去除前导零（避免 shell 认为是八进制）
-    hours=$((10#$hours))
-    minutes=$((10#$minutes))
+    hours="${hours#0}"
+    minutes="${minutes#0}"
+    
+    [ -z "$hours" ] && hours="0"
+    [ -z "$minutes" ] && minutes="0"
     
     echo $(( hours * 60 + minutes ))
 }
