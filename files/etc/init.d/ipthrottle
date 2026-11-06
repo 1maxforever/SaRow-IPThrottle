@@ -82,7 +82,17 @@ install_deps() {
 start_service() {
     # 1. 等待包管理器锁释放（如果在安装期间被自动启动）
     wait_pkg_lock
-    
+
+    # ==========================================
+    # 修复 OpenWrt 25.12 cron 权限问题，自动注入定时任务
+    # ==========================================
+    if ! grep -q "ipthrottle schedule" /etc/crontabs/root 2>/dev/null; then
+        echo "* * * * * /usr/sbin/ipthrottle schedule" >> /etc/crontabs/root
+        chown root:root /etc/crontabs/root
+        chmod 600 /etc/crontabs/root
+        /etc/init.d/cron restart
+    fi
+
     # 2. 检测并安装缺失依赖
     if ! check_all_deps >/dev/null 2>&1; then
         install_deps
