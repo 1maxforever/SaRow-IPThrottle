@@ -1,6 +1,6 @@
 {
 	"admin/network/ipthrottle": {
-		"title": "IPThrottle",
+		"title": "限速管控",
 		"order": 50,
 		"action": {
 			"type": "view",
