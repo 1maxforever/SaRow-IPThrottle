@@ -103,7 +103,7 @@
 			'.ipthrottle-status-stopped { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }';
 		document.head.appendChild(style);
 
-		m = new form.Map('ipthrottle', _('IPThrottle - 内网IP限速'),
+		m = new form.Map('ipthrottle', _('限速管控 - IP限速'),
 			_('按IP限制上传/下载带宽，支持独立/共享限速、IP范围、协议过滤和时间计划'));
 
 		// ==========================================
